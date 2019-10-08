@@ -1,0 +1,24 @@
+{
+    "name": "valkyria/framework",
+    "description": "The Valkyria Framework.",
+    "keywords": ["framework", "laravel"],
+    "homepage": "https://valkyria.com",
+    "authors": [
+        {
+            "name": "Victor Morel",
+            "email": "victormorel.pro@gmail.com"
+        }
+    ],
+    "require": {
+        "php": " >= 7.2.0"
+    },
+    "minimum-stability": "dev",
+    "autoload": {
+        "files": [
+            "src/Helper/Useful.php"
+        ],
+        "psr-4": {
+            "Valkirya\\": "src/Valkyria/"
+        }
+    }
+}
