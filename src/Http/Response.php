@@ -44,6 +44,7 @@ class Response{
           $text = self::$HTTP_CODES[$code];
         }
         $this->response = $this->getProtocol() . " $code $text";
+        return $this;
     }
 
     protected function getProtocol(){

@@ -1,4 +1,8 @@
-/vendor
+/.settings/
+/work/
+/.project
+/.buildpath
 composer.phar
 composer.lock
 /.vscode
+/vendor

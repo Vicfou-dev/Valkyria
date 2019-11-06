@@ -6,10 +6,26 @@ class Template{
 
     protected $fileExentension = 'php';
 
-    public function __construct($folder = null){
-        if( $folder ){
-            $this->setFolder($folder);
+    protected $template;
+
+    public $templates = [];
+
+    protected $subDirectory;
+
+    public function __construct($config){
+
+        if(is_string($config)){
+            $this->setFolder($config);
+
+        } else if (is_array($config)){
+
+            if(isset($config['path'])){ $this->setFolder($config['path']); }
+
+            if(isset($config['folder'])){ $this->subDirectory = $config['folder']; }
+
+            if(isset($config['template'])){ $this->templates = $config['template']; }
         }
+        
         return $this;
     }
 
@@ -17,26 +33,40 @@ class Template{
         $this->folder = rtrim($folder,'/');
     }
 
+    public function setTemplate(String $key){
+        if(isset($this->templates[$key])){
+            $this->template = $this->templates[$key];
+        }
+
+    }
+
     public function render(String $path,Array $args = array()){
-        $template = $this->findTemplate($path);
+        $view = $this->find($path);
         $output = "";
-        if( $template ){
-            $output = $this->renderTemplate($template,$args);
+        if( $view ){
+            $output = $this->renderView($view,$args);
+        }
+        if( is_string($this->template) && ($template = $this->find($this->template,false)) ){
+            $args['view'] = $output;
+            $output = $this->renderView($template,$args);
         }
         return $output;
     }
 
-    protected function findTemplate(String $path){
+    protected function find(String $path,Bool $view = true){
+        if(!is_null($this->subDirectory) && $view){
+            $path = $this->subDirectory . '/' . $path;
+        }
         $file = "{$this->folder}/$path.{$this->fileExentension}";
         if(file_exists($file)){
             return $file;
         }
     }
 
-    protected function renderTemplate(/*$template,$args*/){
+    protected function renderView(/*$template,$args*/){
         ob_start();
         foreach(func_get_args()[1] as $key=>$value){
-            ${key} = $value;
+            ${$key} = $value;
         }
         
         require_once func_get_args()[0];

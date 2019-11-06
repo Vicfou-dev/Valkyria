@@ -3,7 +3,7 @@ namespace Valkyria\Routing;
 
 use Valkyria\Http\Request;
 use Valkyria\Http\Response;
-use Valkyria\Routing\Pipeline;
+use Valkyria\Helper\Pipeline;
 use Closure;
 
 class Router{
@@ -15,8 +15,11 @@ class Router{
 
     protected $actionGroup = [
         'middleware' => [],
-        'prefix' => []
+        'prefix' => [],
+        'namespace' => []
     ];
+
+    protected $stackGroup;
 
     protected $supportedHttpMethods = [
         "GET",
@@ -27,11 +30,15 @@ class Router{
         "OPTIONS"
     ];
 
-    public function __construct($config){
-        $this->config = (object) $config;
-        
+    protected $app;
+
+    protected $namespace;
+
+    protected $pathMiddleware;
+
+    public function __construct(){
+
         $this->request = new Request(
-            isset($_GET) ? $_GET : [],
             isset($_POST) ? $_POST : [],
             isset($_SESSION) ? $_SESSION : [],
             isset($_SERVER) ?  $_SERVER : [],
@@ -43,7 +50,7 @@ class Router{
     protected function newRoute($methodHttp, $route, $action){
 
         if(count($this->actionGroup['middleware'])){ 
-
+            
             $action = ['middleware' => $this->actionGroup['middleware'],$action]; 
           
         }
@@ -61,12 +68,12 @@ class Router{
         if (is_array($methodHttp)) {
             foreach ($methodHttp as $method) {
 
-                $this->routes[$method.$route] = ['method' => $method,'route' => $route, 'action' => $action];          
+                $this->routes[$method.$route] = ['method' => $method,'route' => $route, 'action' => $action,'namespace' => $this->actionGroup['namespace']];          
             }
         }else{
             $method = $methodHttp;
 
-            $this->routes[$method.$route] = ['method' => $method,'route' => $route,'action' => $action];
+            $this->routes[$method.$route] = ['method' => $method,'route' => $route,'action' => $action,'namespace' => $this->actionGroup['namespace']];
 
         } 
     }
@@ -106,7 +113,7 @@ class Router{
     protected function foreachRoute(&$Request){
         foreach ($this->routes as $route => $info) {
             if( ($uri = $this->findRoute( $info['route'],$Request->requestUri ))) {
-                $Request->setUri($uri);
+                $Request->parseUri($uri);
                 return $info;
             }
         }
@@ -126,7 +133,9 @@ class Router{
         $method = array_pop($action);
 
         if( ($controller = array_shift($action)) !== false){
-            $instanceName = $this->config->controller .'\\'. $controller;
+            $namespace[] = $controller;
+            $instanceName = implode('\\',$namespace);
+
             $instance = new $instanceName;
             foreach($this->groupStack as $middleware){
                 $instance->middleware($middleware);
@@ -153,7 +162,12 @@ class Router{
 
     }
 
+    public function middleware($pathMiddleware){
+        $this->pathMiddleware = $pathMiddleware;
+    }
+
     protected function analyseAction($action){
+
         if(is_string($action)){
             return explode('@',$action);
             
@@ -175,13 +189,16 @@ class Router{
     }
     
     protected function updateGroupStack(array $attributes){
+        
         if (isset($attributes['middleware'])){
+
             if(is_string($attributes['middleware'])) {
                 $attributes['middleware'] = explode('|', $attributes['middleware']);
             
             }
             foreach($attributes['middleware'] as $key => $value){
-                $this->groupStack[] = $this->config['middleware'].'\\'. $value;
+                $this->actionGroup['namespace'];
+                $this->groupStack[] = $this->pathMiddleware.'\\'. $value;
             }
 
             return isset($attributes[0]) ? $attributes[0] : null;
@@ -220,21 +237,29 @@ class Router{
             $this->actionGroup['middleware'],
             isset($attributes['middleware']) ? $attributes['middleware'] : []
         );
+
+        if(isset($attributes['middleware'])){
+            $this->stackGroup[] = 'middleware';
+        }
         
         if(isset($attributes['prefix'])){
             $this->actionGroup['prefix'][] = $attributes['prefix'];
+            $this->stackGroup[] = 'prefix';
         }
+
+        if(isset($attributes['namespace'])){
+            $this->actionGroup['namespace'][] = $attributes['namespace'];
+            $this->stackGroup[] = 'namespace';
+        }
+
         //$this->updateGroupStack($attributes);
         call_user_func($callback, $this);
         
-        
-        foreach($this->actionGroup as $key => $value){
-            if( !empty($value) ){
-                array_pop($value);
-                $this->actionGroup[$key] = $value;               
-            }
-            
+        for($i = 0; $i < count($attributes); $i++){
+            $key = array_pop($this->stackGroup);
+            array_pop($this->actionGroup[$key]);
         }
+
 
     }
 
@@ -248,7 +273,7 @@ class Router{
         return $this;
     }
 
-    public function post($uri, $action){
+    public function post($route, $action){
         $this->newRoute('POST', $route, $action);
         return $this;
     }

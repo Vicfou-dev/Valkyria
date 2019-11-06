@@ -19,44 +19,121 @@ class Request{
 
     public $requestUri;
 
-    public function __construct(array $query = [], array $request = [], array $session = [],array $header = [],$content = null){
-        $this->initialize($query,$request,$session,$header,$content);
+    public $attributes;
+
+    public function __construct(array $request = [], array $session = [],array $header = [],$content = null){
+        $this->initialize($request,$session,$header,$content);
     }
 
-    protected function initialize($query,$request,$session,$header,$content){
+    protected function initialize($request,$session,$header,$content){
 
-        $this->query = new ListArray($query);
+        $this->query = new ListArray();
         $this->request = new ListArray($request);
         $this->session = new ListArray($session);
         $this->headers = new ListArray($header);
         $this->content = $content;
+        $this->attributes = new ListArray();
 
-        $this->requestUri = $this->headers->get('REQUEST_URI');
+        $this->parseUri($this->headers->get('REQUEST_URI'));
 
     }
 
-    public function setUri($uri){
-        $this->uri = $uri;
-        parse_str(parse_url($uri, PHP_URL_QUERY),$this->query);
-        return $this;
+    public function getHttpMethod(){
+        return $this->headers->get('REQUEST_METHOD');
     }
 
     public function ajax(){
-        return 'XMLHttpRequest' == $this->headers->get('X-Requested-With');
+        return 'XMLHttpRequest' === $this->headers->get('X-Requested-With');
     }
 
     public function userAgent(){
         return $this->headers->get('User-Agent');
     }
 
-    protected function isJson(){
-        return in_array($this->header('CONTENT_TYPE'),['application/json','application/javascript']); 
+    public function getIp(){
+
+        if ( !empty($this->headers->get("HTTP_CLIENT_IP")) ) return $this->headers->get("HTTP_CLIENT_IP");
+        elseif ( !empty($this->headers->get("HTTP_X_FORWARDED_FOR")) ) return $this->headers->get("HTTP_X_FORWARDED_FOR");
+        else return $this->headers->get("REMOTE_ADDR");
+        
     }
 
+    public function isSecure(){
+        if ($this->headers->exist('HTTPS') && $this->headers->exist('HTTPS') === 'on') return true;
+        elseif ( ($this->headers->exist('HTTP_X_FORWARDED_PROTO') 
+                && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+                || ($this->headers->exist('HTTP_X_FORWARDED_SSL') 
+                && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') ) return true;
+        else return false;
+    }
+
+    public function userAgentHttpInformation(){
+
+        $agent = $this->headers->get("HTTP_USER_AGENT");
+
+        if(preg_match('/Linux/i',$agent)) $os = 'Linux';
+        elseif(preg_match('/Mac/i',$agent)) $os = 'Mac'; 
+        elseif(preg_match('/iPhone/i',$agent)) $os = 'iPhone'; 
+        elseif(preg_match('/iPad/i',$agent)) $os = 'iPad'; 
+        elseif(preg_match('/Droid/i',$agent)) $os = 'Droid'; 
+        elseif(preg_match('/Unix/i',$agent)) $os = 'Unix'; 
+        elseif(preg_match('/Windows/i',$agent)) $os = 'Windows';
+        else $os = 'Unknown';
+
+        // Browser Detection
+        if(preg_match('/Firefox/i',$agent)) $br = 'Firefox'; 
+        elseif(preg_match('/Mac/i',$agent)) $br = 'Mac';
+        elseif(preg_match('/Chrome/i',$agent)) $br = 'Chrome'; 
+        elseif(preg_match('/Opera/i',$agent)) $br = 'Opera'; 
+        elseif(preg_match('/MSIE/i',$agent)) $br = 'IE'; 
+        else $bs = 'Unknown';
+
+        return [
+            'os' => $os,
+            'browser' => $bs
+        ];
+    }
+
+    protected function isJson(){
+
+        if($this->headers->exist('CONTENT_TYPE')){
+            return in_array($this->headers->get('CONTENT_TYPE'),['application/json','application/javascript']); 
+        }
+
+    }
+
+    public function getLanguageBrowser(){
+        return substr($this->headers->get('HTTP_ACCEPT_LANGUAGE'), 0, 2);
+    }
+
+    public function parseUri(String $uri){
+
+        $param = array();
+
+        if( strpos($uri,'?') !== false ){
+
+
+            list($path, $qs) = explode("?", $uri, 2);
+            parse_str($qs,$param);
+            
+            $this->query = new ListArray(array_merge(
+                $this->query->all(),$param
+            ));
+
+            $this->requestUri = $path;
+            
+        } else $this->requestUri = $uri;
+
+        
+    }
+
+    public function getHeaders(){
+        return $this->headers;
+    }
 
     public function json($key = null){
         if (! isset($this->json)) {
-            $this->json = new ArrayList((array) json_decode($this->getContent(), true));
+            $this->json = new ListArray((array) json_decode($this->content, true));
         }
 
         if (is_null($key)) { return $this->json; }
@@ -71,49 +148,53 @@ class Request{
             return $this->json();
         }
 
-        return in_array($this->headers('REQUEST_METHOD'), ['GET', 'HEAD']) ? $this->query : $this->request;
+        return in_array($this->headers->get('REQUEST_METHOD'), ['GET', 'HEAD']) ? $this->query : $this->request;
     }
 
     public function getAuth(){
-        $headerKeys = $this->header->keys();
+        $headerKeys = $this->headers->keys();
 
         $Authorization = [];
 
-        if( in_array($headerKeys,'PHP_AUTH_USER') ){
+        if( in_array('PHP_AUTH_USER',$headerKeys) ){
 
-            $Authorization['PHP_AUTH_USER'] = $this->header->get('PHP_AUTH_USER');
-            $Authorization['PHP_AUTH_PW'] = in_array($headerKeys,'PHP_AUTH_PW') ? $this->header->get('PHP_AUTH_PW') : '';
+            $Authorization['PHP_AUTH_USER'] = $this->headers->get('PHP_AUTH_USER');
+            $Authorization['PHP_AUTH_PW'] = in_array('PHP_AUTH_PW',$headerKeys) ? $this->headers->get('PHP_AUTH_PW') : '';
 
         } else {
 
             $authorizationHeader = null;
 
-            if( in_array($headerKeys,'HTTP_AUTHORIZATION') ) {
+            if( in_array('HTTP_AUTHORIZATION',$headerKeys) ) {
 
-                $authorizationHeader = $this->header->get('HTTP_AUTHORIZATION');
+                $authorizationHeader = $this->headers->get('HTTP_AUTHORIZATION');
 
-            } elseif( in_array($headerKeys,'REDIRECT_HTTP_AUTHORIZATION') ) {
+            } elseif( in_array('REDIRECT_HTTP_AUTHORIZATION',$headerKeys) ) {
 
-                $authorizationHeader = $this->parameters['REDIRECT_HTTP_AUTHORIZATION'];
+                $authorizationHeader = $this->headers->get('REDIRECT_HTTP_AUTHORIZATION');
+
+            } elseif( in_array('AUTHORIZATION',$headerKeys) ) {
+
+                $authorizationHeader = $this->headers->get('AUTHORIZATION');
 
             }
+
             if ( null !== $authorizationHeader ) {
 
                 if ( 0 === stripos($authorizationHeader, 'basic ') ) {
                     
                     $exploded = explode(':', base64_decode(substr($authorizationHeader, 6)), 2);
 
-                    if (2 == count($exploded)) {
+                    if (2 === count($exploded)) {
                         list($Authorization['PHP_AUTH_USER'], $Authorization['PHP_AUTH_PW']) = $exploded;
                     }
                     
-                } elseif (empty($this->header->get('PHP_AUTH_DIGEST')) && (0 === stripos($authorizationHeader, 'digest '))) {
+                } elseif ( $this->headers->exist('PHP_AUTH_DIGEST') && (0 === stripos($authorizationHeader, 'digest '))) {
                     
                     $Authorization['PHP_AUTH_DIGEST'] = $authorizationHeader;
 
                 } elseif (0 === stripos($authorizationHeader, 'bearer ')) {
-                   
-                    $Authorization['AUTHORIZATION'] = $authorizationHeader;
+                    $Authorization['AUTHORIZATION'] = substr($authorizationHeader,7);
 
                 }
             }
@@ -121,21 +202,21 @@ class Request{
 
         if (isset($Authorization['AUTHORIZATION'])) { 
             return [
-                "type" => "Bearer", 
+                "type" => "bearer", 
                 "autorization" => $Authorization['AUTHORIZATION']
             ];
         }
 
         if (isset($Authorization['PHP_AUTH_USER'] )) { 
             return [
-                "type" => "Basic",
+                "type" => "basic",
                 "authorization" => base64_encode($Authorization['PHP_AUTH_USER'].':'.$Authorization['PHP_AUTH_PW'])
             ];
         }
 
         elseif (isset($Authorization['PHP_AUTH_DIGEST'])) { 
             return [
-                "type" => "Digest",
+                "type" => "digest",
                 "authorization" => $Authorization['PHP_AUTH_DIGEST']
             ];
         }

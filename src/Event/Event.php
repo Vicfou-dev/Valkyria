@@ -1,7 +1,8 @@
 <?php
 namespace Valkyria\Event;
 
-class EventListener{
+class EventListener {
+
     protected static $events = [];
 
     public static function listen($name, $callback){

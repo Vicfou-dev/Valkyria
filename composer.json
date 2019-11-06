@@ -1,7 +1,7 @@
 {
     "name": "valkyria/framework",
     "description": "The Valkyria Framework.",
-    "keywords": ["framework", "laravel"],
+    "keywords": ["framework", "valkyria"],
     "homepage": "https://valkyria.com",
     "authors": [
         {
@@ -12,13 +12,5 @@
     "require": {
         "php": " >= 7.2.0"
     },
-    "minimum-stability": "dev",
-    "autoload": {
-        "files": [
-            "src/Helper/Useful.php"
-        ],
-        "psr-4": {
-            "Valkirya\\": "src/Valkyria/"
-        }
-    }
+    "minimum-stability": "dev"
 }
